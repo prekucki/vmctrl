@@ -1,0 +1,8 @@
+[package]
+name = "vmctrl"
+version = "0.1.0"
+authors = ["Przemysław K. Rekucki <przemyslaw.rekucki@golem.network>"]
+
+[dependencies]
+error-chain = "0.12"
+nom={ version="4.0", features=["verbose-errors"]}
