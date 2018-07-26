@@ -1,6 +1,6 @@
 extern crate vmctrl;
 
-use vmctrl::{local, ssh, vmware, CommandRunner, Driver, Machine, virtual_box};
+use vmctrl::{local, ssh, vmware, CommandRunner, Driver, Machine};
 
 fn main() {
     //let l = ssh("macx");
@@ -25,14 +25,22 @@ fn main() {
     //m.create_snapshot("test").unwrap();
     //m.revert_to("test").unwrap();
 
-
-    let vb = virtual_box::Driver::from_cmd(local());
-
+    let vb = vmware::Driver::from_cmd(local());
 
     println!("vbox running:");
-    for v in vb.list_running().unwrap() {
-        println!("v={}", v.name())
+    for mut v in vb.list_running().unwrap() {
+        println!("v={}", v.name());
+        println!("snapshots:");
+        let mut do_clean = false;
+        for s in v.list_snapshots().unwrap() {
+            println!("s={}", &s);
+            if s == "clean" {
+                do_clean = true;
+            }
+        }
+
+        if do_clean {
+            v.revert_to("clean").unwrap();
+        }
     }
-
-
 }

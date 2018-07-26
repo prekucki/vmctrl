@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
-extern crate nom;
-
+extern crate lazy_static;
+extern crate regex;
 
 pub trait Driver {
     type Error;
@@ -24,13 +24,33 @@ pub trait Machine {
 
     fn start(&mut self) -> Result<(), Self::Error>;
 
-    fn revert_to<A : AsRef<str>>(&mut self, snapshot_name : A) -> Result<(), Self::Error>;
+    fn revert_to(&mut self, snapshot_name: &str) -> Result<(), Self::Error>;
 
-    fn create_snapshot<A :  AsRef<str>>(&mut self, snapshot_name: A) -> Result<(), Self::Error>;
+    fn create_snapshot(&mut self, snapshot_name: &str) -> Result<(), Self::Error>;
 }
 
 pub use command::{local, ssh, CommandRunner};
 
 pub mod command;
-pub mod vmware;
+pub mod uri;
+pub mod error;
+
+#[cfg(feature="virtualbox")]
 pub mod virtual_box;
+#[cfg(feature="vmware")]
+pub mod vmware;
+
+pub fn driver() -> impl Driver<Error=error::Error,Machine=Box<Machine<Error=error::Error> + 'static>> {
+    let mut uri = uri::DriverRepo::default();
+
+    #[cfg(feature="vmware")]
+    uri.register("vmware", vmware::local_driver());
+
+    #[cfg(feature="virtualbox")]
+    uri.register("virtualbox", virtual_box::local_driver());
+
+    uri
+}
+
+
+

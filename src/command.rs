@@ -3,21 +3,7 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::process::{Command, ExitStatus};
 use std::str::{from_utf8, Utf8Error};
-
-error_chain! {
-
-    foreign_links {
-        IO(io::Error) #[doc = "Error during IO"];
-        UTF8(Utf8Error);
-    }
-
-    errors {
-        Exec(code : i32, stderr : Vec<u8>, stdout : Vec<u8>) {
-            description("shell command exec failed")
-            display("Error code {}", code)
-        }
-    }
-}
+use super::error::*;
 
 pub trait CommandRunner {
     fn run_with_output<C, I, S>(&self, cmd: C, args: I) -> Result<Output>
@@ -78,8 +64,8 @@ impl CommandRunner for Local {
         }
         bail!(ErrorKind::Exec(
             status.code().unwrap_or(0i32),
-            output.stderr,
-            output.stdout
+            output.stderr.into(),
+            output.stdout.into()
         ))
     }
 }
@@ -97,15 +83,14 @@ fn escape_shell_chars<'a>(s: &'a OsStr) -> Cow<'a, OsStr> {
         return Cow::Borrowed(s);
     }
 
-    let mut result: String = seq.chars()
-        .fold(String::from("'"), |mut s, ch| {
-            if ch == '\'' {
-                s.push_str("'\\''")
-            } else {
-                s.push(ch)
-            }
-            s
-        });
+    let mut result: String = seq.chars().fold(String::from("'"), |mut s, ch| {
+        if ch == '\'' {
+            s.push_str("'\\''")
+        } else {
+            s.push(ch)
+        }
+        s
+    });
 
     result.push('\'');
 
@@ -140,8 +125,8 @@ impl CommandRunner for Ssh {
         }
         bail!(ErrorKind::Exec(
             status.code().unwrap_or(0i32),
-            output.stderr,
-            output.stdout
+            output.stderr.into(),
+            output.stdout.into()
         ))
     }
 }
@@ -154,7 +139,6 @@ pub fn ssh<T: Into<String>>(host: T) -> impl CommandRunner {
     Ssh { host: host.into() }
 }
 
-
 #[cfg(test)]
 mod tests {
 
@@ -162,11 +146,10 @@ mod tests {
 
     #[test]
     fn test_escape_shell_chars() {
-        let a1 : &OsStr = "ala".as_ref();
-        let a2 : &OsStr = "'ala ma kota'".as_ref();
+        let a1: &OsStr = "ala".as_ref();
+        let a2: &OsStr = "'ala ma kota'".as_ref();
         assert_eq!(escape_shell_chars(a1), a1);
         assert_eq!(escape_shell_chars("ala ma kota".as_ref()), a2)
-
     }
 
 }

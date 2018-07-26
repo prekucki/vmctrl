@@ -5,4 +5,22 @@ authors = ["Przemysław K. Rekucki <przemyslaw.rekucki@golem.network>"]
 
 [dependencies]
 error-chain = "0.12"
-nom={ version="4.0", features=["verbose-errors"]}
+regex = "1"
+lazy_static="1"
+
+[features]
+default=["vmware", "virtualbox"]
+
+vmware=[]
+virtualbox=[]
+
+
+[[example]]
+name="test_vmware"
+required-features=["vmware"]
+
+[[example]]
+name="test_run"
+
+[[example]]
+name="test_driver"
