@@ -173,7 +173,6 @@ pub fn local_driver() -> Box<DriverFactory> {
 }
 
 pub fn remote_driver() -> Box<DriverFactory> {
-    use super::remote::*;
 
     factory().into()
 }

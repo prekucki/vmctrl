@@ -26,7 +26,7 @@ pub trait Machine {
     fn create_snapshot(&mut self, snapshot_name: &str) -> Result<(), error::Error>;
 }
 
-pub use command::{local, ssh, CommandRunner, FromCommandRunner};
+pub use crate::command::{local, ssh, CommandRunner, FromCommandRunner};
 
 pub mod command;
 pub mod error;

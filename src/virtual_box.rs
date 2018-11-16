@@ -195,7 +195,6 @@ impl<Cmd: CommandRunner> super::Machine for MachineRef<Cmd> {
 }
 
 pub fn remote_driver() -> Box<DriverFactory> {
-    use super::remote::*;
 
     factory().into()
 }
