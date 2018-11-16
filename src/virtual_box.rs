@@ -3,12 +3,12 @@ use super::uri::DriverFactory;
 use super::Machine;
 use std::borrow::Cow;
 use std::ffi::OsStr;
-use std::io;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
+use super::error::*;
 use regex::Regex;
 use std::str;
-use super::error::*;
 
 pub struct Driver<Cmd: CommandRunner> {
     inner: Rc<DriverImpl<Cmd>>,
@@ -17,6 +17,26 @@ pub struct Driver<Cmd: CommandRunner> {
 struct DriverImpl<Cmd: CommandRunner> {
     command_runner: Cmd,
     manage_command: Cow<'static, OsStr>,
+}
+
+pub struct Factory<C: CommandRunner> {
+    marker: PhantomData<C>,
+}
+
+#[inline]
+pub fn factory<C: CommandRunner>() -> Factory<C> {
+    Factory {
+        marker: PhantomData,
+    }
+}
+
+impl<C: CommandRunner> command::FromCommandRunner for Factory<C> {
+    type Command = C;
+    type Output = Driver<C>;
+
+    fn from_cmd(&self, cmd: Self::Command) -> Self::Output {
+        Driver::<C>::from_cmd(cmd)
+    }
 }
 
 impl<C: CommandRunner> Driver<C> {
@@ -36,7 +56,8 @@ impl<C: CommandRunner> DriverImpl<C> {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        Ok(self.command_runner
+        Ok(self
+            .command_runner
             .run_with_output(&self.manage_command, args)?)
     }
 }
@@ -48,15 +69,6 @@ pub struct MachineRef<Cmd: CommandRunner> {
 }
 
 impl<Cmd: CommandRunner> Driver<Cmd> {
-    fn run_list<Item: AsRef<OsStr>, List: IntoIterator<Item = Cow<'static, str>>>(
-        &self,
-        args: List,
-    ) -> Result<Output> {
-        let out = self.inner.run(&["list"])?;
-
-        bail!("not ready")
-    }
-
     fn machine<IntoStr: Into<String>>(
         &self,
         path: IntoStr,
@@ -71,7 +83,6 @@ impl<Cmd: CommandRunner> Driver<Cmd> {
 }
 
 impl<Cmd: CommandRunner> super::Driver for Driver<Cmd> {
-    type Error = Error;
     type Machine = MachineRef<Cmd>;
 
     fn list_running(&self) -> Result<Vec<MachineRef<Cmd>>> {
@@ -81,8 +92,7 @@ impl<Cmd: CommandRunner> super::Driver for Driver<Cmd> {
             .map(|line| {
                 vmslist_parse(line.as_ref())
                     .map(|(name, uuid)| self.machine(name, Some(uuid.into())))
-            })
-            .collect()
+            }).collect()
     }
 
     fn from_path(&self, path: &str) -> Result<MachineRef<Cmd>> {
@@ -104,9 +114,7 @@ fn vmslist_parse(line: &str) -> Result<(&str, &str)> {
     bail!("invalid")
 }
 
-pub fn init() {
-
-}
+pub fn init() {}
 
 #[test]
 fn test_vmslist_parse() {
@@ -123,26 +131,23 @@ impl<T: CommandRunner> MachineRef<T> {
 }
 
 impl<Cmd: CommandRunner + 'static> DriverFactory for Driver<Cmd> {
-    fn machine_for_uri(&self, uri: &str) -> Option<Box<Machine<Error=Error>>> {
+    fn machine_for_uri(&self, uri: &str) -> Option<Box<Machine>> {
         Some(Box::new(self.machine(uri, None)))
     }
 }
-
 
 pub fn local_driver() -> Box<DriverFactory> {
     Box::new(Driver::from_cmd(command::local()))
 }
 
-
 impl<Cmd: CommandRunner> super::Machine for MachineRef<Cmd> {
-    type Error = Error;
-
     fn name(&self) -> &str {
         self.path.as_ref()
     }
 
     fn list_snapshots(&self) -> Result<Vec<String>> {
-        let output = self.driver_ref
+        let output = self
+            .driver_ref
             .run(&["snapshot", self.vmid(), "list", "--machinereadable"]);
         let prop_re = Regex::new("^([a-zA-Z0-9\\-]+)=\"([^\"]*)\"$").unwrap();
         let mut res = Vec::new();
@@ -168,20 +173,29 @@ impl<Cmd: CommandRunner> super::Machine for MachineRef<Cmd> {
     }
 
     fn start(&mut self) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["startvm", self.vmid(), "--type", "headless"])?;
         Ok(())
     }
 
     fn revert_to(&mut self, snapshot_name: &str) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["snapshot", self.vmid(), "restore", snapshot_name])?;
         Ok(())
     }
 
     fn create_snapshot(&mut self, snapshot_name: &str) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["snapshot", self.vmid(), "take", snapshot_name])?;
         Ok(())
     }
+}
+
+pub fn remote_driver() -> Box<DriverFactory> {
+    use super::remote::*;
+
+    factory().into()
 }

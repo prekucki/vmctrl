@@ -1,13 +1,11 @@
-
 extern crate vmctrl;
-use vmctrl::{Driver, Machine};
 use std::env;
+use vmctrl::{Driver, Machine};
 
 fn main() {
-
     let driver = vmctrl::driver();
 
-    let args : Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
 
     println!("uri={}", args[1]);
 
@@ -17,5 +15,4 @@ fn main() {
     for s in m.list_snapshots().unwrap() {
         println!("s={}", s);
     }
-
 }

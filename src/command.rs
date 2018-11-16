@@ -1,9 +1,15 @@
+use super::error::*;
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
-use std::io;
-use std::process::{Command, ExitStatus};
+use std::process::{Command, Stdio};
 use std::str::{from_utf8, Utf8Error};
-use super::error::*;
+
+pub trait FromCommandRunner {
+    type Command: CommandRunner;
+    type Output;
+
+    fn from_cmd(&self, cmd: Self::Command) -> Self::Output;
+}
 
 pub trait CommandRunner {
     fn run_with_output<C, I, S>(&self, cmd: C, args: I) -> Result<Output>
@@ -51,7 +57,7 @@ impl CommandRunner for Local {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        let output = Command::new(cmd).args(args).output()?;
+        let output = Command::new(cmd).args(args).stdin(Stdio::null()).output()?;
         let status = output.status;
         if status.success() {
             let ret: ::std::result::Result<Vec<String>, Utf8Error> = output
@@ -70,7 +76,7 @@ impl CommandRunner for Local {
     }
 }
 
-struct Ssh {
+pub struct Ssh {
     host: String,
 }
 
@@ -112,7 +118,8 @@ impl CommandRunner for Ssh {
         }
         let host: &OsStr = self.host.as_ref();
         let output = Command::new("ssh")
-            .args(&[host, shell_command.as_ref()])
+            .args(&["-oBatchMode=yes".as_ref(), host, shell_command.as_ref()])
+            .stdin(Stdio::null())
             .output()?;
         let status = output.status;
         if status.success() {
@@ -135,7 +142,7 @@ pub fn local() -> impl CommandRunner {
     Local
 }
 
-pub fn ssh<T: Into<String>>(host: T) -> impl CommandRunner {
+pub fn ssh<T: Into<String>>(host: T) -> Ssh {
     Ssh { host: host.into() }
 }
 

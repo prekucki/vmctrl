@@ -1,10 +1,7 @@
 use super::Driver;
 use super::Machine;
-use std::any::Any;
-use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use super::error::*;
@@ -30,7 +27,7 @@ impl<'a> From<&'a str> for VmUri<'a> {
     }
 }
 
-type MachinePtr = Box<Machine<Error = Error>>;
+type MachinePtr = Box<Machine>;
 
 pub trait DriverFactory {
     fn machine_for_uri(&self, uri: &str) -> Option<MachinePtr>;
@@ -66,7 +63,6 @@ impl DriverRepo {
 }
 
 impl Driver for DriverRepo {
-    type Error = Error;
     type Machine = MachinePtr;
 
     fn list_running(&self) -> Result<Vec<<Self as Driver>::Machine>> {
@@ -84,31 +80,29 @@ impl Driver for DriverRepo {
     }
 }
 
-impl<E> Machine for Box<Machine<Error = E>> where E : ::std::error::Error + Send + 'static {
-    type Error = Error;
-
+impl Machine for Box<Machine> {
     fn name(&self) -> &str {
         (**self).name()
     }
 
     fn list_snapshots(&self) -> Result<Vec<String>> {
-        (**self).list_snapshots().chain_err(|| "list_snapshots")
+        (**self).list_snapshots()
     }
 
     fn stop(&mut self) -> Result<()> {
-        (**self).stop().chain_err(|| "stop")
+        (**self).stop()
     }
 
     fn start(&mut self) -> Result<()> {
-        (**self).start().chain_err(|| "start")
+        (**self).start()
     }
 
     fn revert_to(&mut self, snapshot_name: &str) -> Result<()> {
-        unimplemented!()
+        (**self).revert_to(snapshot_name)
     }
 
     fn create_snapshot(&mut self, snapshot_name: &str) -> Result<()> {
-        unimplemented!()
+        (**self).create_snapshot(snapshot_name)
     }
 }
 
@@ -129,8 +123,6 @@ mod test {
     }
 
     impl Machine for NopMachine {
-        type Error = Error;
-
         fn name(&self) -> &str {
             self.0.as_ref()
         }
@@ -147,11 +139,11 @@ mod test {
             unimplemented!()
         }
 
-        fn revert_to(&mut self, snapshot_name: &str) -> Result<()> {
+        fn revert_to(&mut self, _snapshot_name: &str) -> Result<()> {
             unimplemented!()
         }
 
-        fn create_snapshot(&mut self, snapshot_name: &str) -> Result<()> {
+        fn create_snapshot(&mut self, _snapshot_name: &str) -> Result<()> {
             unimplemented!()
         }
     }

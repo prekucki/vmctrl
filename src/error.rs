@@ -1,5 +1,4 @@
-
-use std::{io, str, fmt};
+use std::{fmt, io, str};
 
 error_chain! {
 
@@ -20,7 +19,7 @@ error_chain! {
 }
 
 pub struct ProcessOutput {
-    c : Vec<u8>
+    c: Vec<u8>,
 }
 
 impl From<Vec<u8>> for ProcessOutput {
@@ -33,8 +32,7 @@ impl fmt::Debug for ProcessOutput {
     fn fmt<'a>(&self, f: &mut fmt::Formatter<'a>) -> fmt::Result {
         if let Ok(s) = str::from_utf8(self.c.as_ref()) {
             fmt::Debug::fmt(s, f)
-        }
-        else {
+        } else {
             fmt::Debug::fmt(&self.c, f)
         }
     }

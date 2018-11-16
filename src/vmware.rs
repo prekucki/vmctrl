@@ -1,8 +1,8 @@
-use super::{command, uri, CommandRunner, Machine};
-use super::uri::{DriverFactory};
+use super::uri::DriverFactory;
+use super::{command, CommandRunner, FromCommandRunner, Machine};
 use std::borrow::Cow;
 use std::ffi::OsStr;
-use std::io;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use super::error::*;
@@ -11,8 +11,22 @@ pub struct Driver<Cmd: CommandRunner> {
     inner: Rc<DriverImpl<Cmd>>,
 }
 
-impl<C: CommandRunner> Driver<C> {
-    pub fn from_cmd(cmd: C) -> Self {
+pub struct Factory<C: CommandRunner> {
+    marker: PhantomData<C>,
+}
+
+#[inline]
+pub fn factory<C: CommandRunner>() -> Factory<C> {
+    Factory {
+        marker: PhantomData,
+    }
+}
+
+impl<C: CommandRunner> command::FromCommandRunner for Factory<C> {
+    type Command = C;
+    type Output = Driver<C>;
+
+    fn from_cmd(&self, cmd: Self::Command) -> Self::Output {
         Driver {
             inner: Rc::new(DriverImpl {
                 command_runner: cmd,
@@ -28,7 +42,8 @@ impl<C: CommandRunner> DriverImpl<C> {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        Ok(self.command_runner
+        Ok(self
+            .command_runner
             .run_with_output(&self.vmrun_command, args)?)
     }
 }
@@ -44,15 +59,6 @@ pub struct MachineRef<Cmd: CommandRunner> {
 }
 
 impl<Cmd: CommandRunner> Driver<Cmd> {
-    fn run_list<Item: AsRef<OsStr>, List: IntoIterator<Item = Cow<'static, str>>> (
-        &self,
-        args: List,
-    ) -> Result<command::Output> {
-        let out = self.inner.run(&["list"])?;
-
-        bail!("not ready")
-    }
-
     fn machine(&self, path: String) -> MachineRef<Cmd> {
         MachineRef {
             driver_ref: self.inner.clone(),
@@ -76,7 +82,6 @@ const VM_LIST_PREFIX: &str = "Total running VMs: ";
 const VM_SNAPSHOTS_PREFIX: &str = "Total snapshots: ";
 
 impl<Cmd: CommandRunner> super::Driver for Driver<Cmd> {
-    type Error = Error;
     type Machine = MachineRef<Cmd>;
 
     fn list_running(&self) -> Result<Vec<MachineRef<Cmd>>> {
@@ -106,18 +111,17 @@ impl<Cmd: CommandRunner> super::Driver for Driver<Cmd> {
 }
 
 impl<Cmd: CommandRunner> super::Machine for MachineRef<Cmd> {
-    type Error = Error;
-
     fn name(&self) -> &str {
         self.path.as_ref()
     }
 
     fn list_snapshots(&self) -> Result<Vec<String>> {
-        let mut lines = self.driver_ref
+        let mut lines = self
+            .driver_ref
             .run(&["listSnapshots", &self.path])?
             .into_iter();
         let summary: String = lines.next().chain_err(|| ErrorKind::MissingSummary)?;
-        let n = if summary.starts_with(VM_SNAPSHOTS_PREFIX) {
+        let _n = if summary.starts_with(VM_SNAPSHOTS_PREFIX) {
             let s: &str = summary[VM_SNAPSHOTS_PREFIX.len()..].as_ref();
             s.parse::<usize>()
                 .chain_err(|| ErrorKind::InvalidResponse(summary.clone()))?
@@ -128,44 +132,51 @@ impl<Cmd: CommandRunner> super::Machine for MachineRef<Cmd> {
     }
 
     fn stop(&mut self) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["stop", &self.path, "hard"])?
             .into_iter();
         Ok(())
     }
 
     fn start(&mut self) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["start", &self.path, "nogui"])?
             .into_iter();
         Ok(())
     }
 
     fn revert_to(&mut self, snapshot_name: &str) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["revertToSnapshot", &self.path, snapshot_name.as_ref()])?;
         self.start()
     }
 
     fn create_snapshot(&mut self, snapshot_name: &str) -> Result<()> {
-        let _ = self.driver_ref
+        let _ = self
+            .driver_ref
             .run(&["snapshot", &self.path, snapshot_name.as_ref()])?;
         Ok(())
     }
 }
 
 impl<Cmd: CommandRunner + 'static> DriverFactory for Driver<Cmd> {
-    fn machine_for_uri(&self, uri: &str) -> Option<Box<Machine<Error=Error>>> {
+    fn machine_for_uri(&self, uri: &str) -> Option<Box<Machine>> {
         Some(Box::new(self.machine(uri.into())))
     }
 }
 
-
 pub fn local_driver() -> Box<DriverFactory> {
-    Box::new(Driver::from_cmd(command::local()))
+    Box::new(factory().from_cmd(command::local()))
 }
 
+pub fn remote_driver() -> Box<DriverFactory> {
+    use super::remote::*;
 
+    factory().into()
+}
 
 #[cfg(test)]
 mod test {
